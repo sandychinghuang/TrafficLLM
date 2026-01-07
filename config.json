@@ -1,0 +1,8 @@
+{
+  "model_path": "zai-org/chatglm2-6b",
+  "peft_path": "models/chatglm2/peft/",
+  "peft_set": {
+    "MTD": "ustc-tfc-2016-detection-packet/checkpoint-10000/"
+  }
+}
+

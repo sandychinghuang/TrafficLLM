@@ -1,0 +1,15 @@
+models/chatglm2/peft/csic-2010-detection-packet
+models/chatglm2/peft/dapt-2020-detection-packet
+models/chatglm2/peft/instruction
+models/chatglm2/peft/iscx-botnet-2014-detection-packet
+models/chatglm2/peft/iscx-tor-2016-detection-packet
+models/chatglm2/peft/iscx-vpn-2016-detection-packet
+models/chatglm2/peft/ustc-tfc-2016-generation-packet-header
+models/chatglm2/peft/ustc-tfc-2016-generation-packet-payload
+models/chatglm2/peft/ustc-tfc-2016-detection-packet/checkpoint-4000
+models/chatglm2/peft/ustc-tfc-2016-detection-packet/checkpoint-8000
+
+preprocess/__pycache__
+dual-stage-tuning/__pycache__
+
+cache/

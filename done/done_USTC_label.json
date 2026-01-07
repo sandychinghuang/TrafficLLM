@@ -1,0 +1,22 @@
+{
+    "BitTorrent": 0,
+    "Cridex": 1,
+    "Facetime": 2,
+    "FTP": 3,
+    "Geodo": 4,
+    "Gmail": 5,
+    "Htbot": 6,
+    "Miuref": 7,
+    "MySQL": 8,
+    "Neris": 9,
+    "Nsis-ay": 10,
+    "Outlook": 11,
+    "Shifu": 12,
+    "Skype": 13,
+    "SMB": 14,
+    "Tinba": 15,
+    "Virut": 16,
+    "Weibo": 17,
+    "WorldOfWarcraft": 18,
+    "Zeus": 19
+}
