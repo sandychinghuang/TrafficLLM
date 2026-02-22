@@ -80,17 +80,17 @@ def stage2_tuning(model_name, traffic_data, task_name, validation_data=None, res
     --per_device_eval_batch_size 1 \
     --gradient_accumulation_steps 8\
     --predict_with_generate \
-    --num_train_epochs 3 \
+    --max_steps 20000 \
     --logging_steps 20 \
-    --save_steps 500 \
+    --save_steps 1000 \
     --learning_rate 1e-4 \
     --pre_seq_len 128 \
-    --warmup_steps 1000 \
+    --warmup_steps 1500 \
     --bf16 True \
     --lr_scheduler_type cosine \
     --do_eval \
     --evaluation_strategy steps \
-    --eval_steps 500"
+    --eval_steps 1000"
 
     if resume:
         cmd += " --resume_from_checkpoint True"

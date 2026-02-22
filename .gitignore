@@ -9,6 +9,10 @@ models/chatglm2/peft/ustc-tfc-2016-generation-packet-payload
 models/chatglm2/peft/ustc-tfc-2016-detection-packet/checkpoint-4000
 models/chatglm2/peft/ustc-tfc-2016-detection-packet/checkpoint-8000
 
+models/chatglm2/chatglm2-6b
+
+done/CIC-IDS-2017
+
 preprocess/__pycache__
 dual-stage-tuning/__pycache__
 

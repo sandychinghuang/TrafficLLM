@@ -13,18 +13,15 @@ def get_abs_path(path):
     return os.path.abspath(path)
 
 
-def stage1_tuning(model_name, instruction_data, validation_data=None, resume=False):
+def stage1_tuning(model_name, instruction_data):
     tuner_script = os.path.join(PROJECT_ROOT, "dual-stage-tuning", "main.py")
     cache_dir = os.path.join(PROJECT_ROOT, "cache")
     output_dir = os.path.join(PROJECT_ROOT, "models", "chatglm2", "peft", "instruction")
 
-    if validation_data is None:
-        validation_data = instruction_data
-
     cmd = f"torchrun --standalone --nnodes=1 --nproc-per-node=1 {tuner_script} \
     --do_train \
     --train_file {instruction_data} \
-    --validation_file {validation_data} \
+    --validation_file {instruction_data} \
     --preprocessing_num_workers 10 \
     --prompt_column instruction \
     --response_column output \
@@ -43,29 +40,20 @@ def stage1_tuning(model_name, instruction_data, validation_data=None, resume=Fal
     --logging_steps 10 \
     --save_steps 1000 \
     --learning_rate 2e-2 \
-    --pre_seq_len 128 \
-    --do_eval \
-    --evaluation_strategy steps \
-    --eval_steps 500"
-
-    if resume:
-        cmd += " --resume_from_checkpoint True"
+    --pre_seq_len 128"
 
     os.system(cmd)
 
 
-def stage2_tuning(model_name, traffic_data, task_name, validation_data=None, resume=False):
+def stage2_tuning(model_name, traffic_data, task_name):
     tuner_script = os.path.join(PROJECT_ROOT, "dual-stage-tuning", "main.py")
     cache_dir = os.path.join(PROJECT_ROOT, "cache")
     output_dir = os.path.join(PROJECT_ROOT, "models", "chatglm2", "peft", task_name)
 
-    if validation_data is None:
-        validation_data = traffic_data
-
     cmd = f"torchrun --standalone --nnodes=1 --nproc-per-node=1 {tuner_script} \
     --do_train \
     --train_file {traffic_data} \
-    --validation_file {validation_data} \
+    --validation_file {traffic_data} \
     --preprocessing_num_workers 10 \
     --prompt_column instruction \
     --response_column output \
@@ -74,31 +62,22 @@ def stage2_tuning(model_name, traffic_data, task_name, validation_data=None, res
     --model_name_or_path {model_name} \
     --output_dir {output_dir} \
     --overwrite_output_dir \
-    --max_source_length 1024\
+    --max_source_length 1024 \
     --max_target_length 32 \
-    --per_device_train_batch_size 8 \
+    --per_device_train_batch_size 4 \
     --per_device_eval_batch_size 1 \
-    --gradient_accumulation_steps 8\
+    --gradient_accumulation_steps 4 \
     --predict_with_generate \
-    --num_train_epochs 3 \
+    --max_steps 15000 \
     --logging_steps 20 \
-    --save_steps 500 \
-    --learning_rate 1e-4 \
-    --pre_seq_len 128 \
-    --warmup_steps 1000 \
-    --bf16 True \
-    --lr_scheduler_type cosine \
-    --do_eval \
-    --evaluation_strategy steps \
-    --eval_steps 500"
-
-    if resume:
-        cmd += " --resume_from_checkpoint True"
+    --save_steps 2000 \
+    --learning_rate 3e-4 \
+    --pre_seq_len 128"
 
     os.system(cmd)
 
 
-def model_update(model_name, traffic_data, task_name, validation_data=None, resume=False):
+def model_update(model_name, traffic_data, task_name):
     peft_dir = os.path.join(PROJECT_ROOT, "models", "chatglm2", "peft")
     if not os.path.exists(peft_dir):
         os.makedirs(peft_dir, exist_ok=True)
@@ -106,10 +85,10 @@ def model_update(model_name, traffic_data, task_name, validation_data=None, resu
     if task_name in os.listdir(peft_dir):
          print(f"Warning: task {task_name} already exists in {peft_dir}")
     
-    stage2_tuning(model_name, traffic_data, task_name, validation_data=validation_data, resume=resume)
+    stage2_tuning(model_name, traffic_data, task_name)
 
 
-def model_insert(model_name, traffic_data, task_name, validation_data=None, resume=False):
+def model_insert(model_name, traffic_data, task_name):
     peft_dir = os.path.join(PROJECT_ROOT, "models", "chatglm2", "peft")
     if not os.path.exists(peft_dir):
         os.makedirs(peft_dir, exist_ok=True)
@@ -117,7 +96,7 @@ def model_insert(model_name, traffic_data, task_name, validation_data=None, resu
     if task_name not in os.listdir(peft_dir):
         os.mkdir(os.path.join(peft_dir, task_name))
     
-    stage2_tuning(model_name, traffic_data, task_name, validation_data=validation_data, resume=resume)
+    stage2_tuning(model_name, traffic_data, task_name)
 
 
 def main(model_name,
@@ -125,7 +104,6 @@ def main(model_name,
          adaptation_task: str = "update",
          task_name: str = "IDS",
          skip_stage1: bool = True,
-         resume: bool = False,
          **kwargs):
     
     print(f"Starting EA-PEFT process...")
@@ -140,37 +118,32 @@ def main(model_name,
     # Path setup
     instruction_path = os.path.join(tuning_data, "instructions/instruction.json")
     traffic_path = os.path.join(tuning_data, "traffic/traffic.json")
-    val_path = None
     
     # Special case for IDS data
     if not os.path.exists(traffic_path):
-        for prefix in ["binary_", "multi_"]:
-            p_train = os.path.join(tuning_data, f"cicids_{prefix}train.json")
-            p_val = os.path.join(tuning_data, f"cicids_{prefix}val.json")
-            if os.path.exists(p_train):
-                traffic_path = p_train
-                if os.path.exists(p_val):
-                    val_path = p_val
-                break
+        potential_ids_path = os.path.join(tuning_data, "cicids_binary_train.json")
+        if os.path.exists(potential_ids_path):
+            traffic_path = potential_ids_path
+        else:
+            potential_multi_path = os.path.join(tuning_data, "cicids_multi_train.json")
+            if os.path.exists(potential_multi_path):
+                traffic_path = potential_multi_path
 
     if not skip_stage1:
         if os.path.exists(instruction_path):
             print(f"Starting Stage 1 Tuning (Instruction)...")
-            stage1_tuning(model_name, instruction_path, resume=resume)
+            stage1_tuning(model_name, instruction_path)
         else:
             print(f"Warning: Instruction file not found at {instruction_path}, skipping Stage 1.")
 
     if os.path.exists(traffic_path):
         print(f"Starting Stage 2 Tuning (Traffic: {traffic_path})...")
-        if val_path:
-            print(f"  Validating with: {val_path}")
-        
         if adaptation_task == "update":
-            model_update(model_name, traffic_path, task_name, validation_data=val_path, resume=resume)
+            model_update(model_name, traffic_path, task_name)
         elif adaptation_task == "register":
-            model_insert(model_name, traffic_path, task_name, validation_data=val_path, resume=resume)
+            model_insert(model_name, traffic_path, task_name)
     else:
-        print(f"Error: Traffic training file not found at {tuning_data}")
+        print(f"Error: Traffic training file not found at {traffic_path}")
 
 
 if __name__ == "__main__":

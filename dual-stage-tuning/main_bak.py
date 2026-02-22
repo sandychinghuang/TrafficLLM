@@ -22,7 +22,6 @@ import logging
 import os
 import sys
 import json
-import random
 
 import numpy as np
 from datasets import load_dataset
@@ -85,9 +84,6 @@ def main():
         + f"distributed training: {bool(training_args.local_rank != -1)}, 16-bits training: {training_args.fp16}"
     )
     logger.info(f"Training/evaluation parameters {training_args}")
-
-    # Suppress GenerationConfig logs
-    transformers.utils.logging.get_logger("transformers.configuration_utils").setLevel(logging.WARNING)
 
     # Set seed before initializing model.
     set_seed(training_args.seed)
@@ -250,24 +246,6 @@ def main():
         if "validation" not in raw_datasets:
             raise ValueError("--do_eval requires a validation dataset")
         eval_dataset = raw_datasets["validation"]
-
-        # Balanced sampling: 100 BENIGN, 100 MALICIOUS
-        if response_column in eval_dataset.column_names:
-            logger.info("Performing balanced sampling for validation set (100 Benign / 100 Malicious)...")
-            labels = eval_dataset[response_column]
-            benign_indices = [i for i, val in enumerate(labels) if str(val).strip().upper() == "BENIGN"]
-            malicious_indices = [i for i, val in enumerate(labels) if str(val).strip().upper() == "MALICIOUS"]
-            
-            random.seed(training_args.seed)
-            sampled_indices = []
-            sampled_indices.extend(random.sample(benign_indices, min(len(benign_indices), 100)))
-            sampled_indices.extend(random.sample(malicious_indices, min(len(malicious_indices), 100)))
-            
-            if sampled_indices:
-                random.shuffle(sampled_indices)
-                eval_dataset = eval_dataset.select(sampled_indices)
-                logger.info(f"Sampling complete. Final validation set size: {len(eval_dataset)}")
-
         if data_args.max_eval_samples is not None:
             max_eval_samples = min(len(eval_dataset), data_args.max_eval_samples)
             eval_dataset = eval_dataset.select(range(max_eval_samples))
@@ -323,32 +301,17 @@ def main():
         decoded_labels = tokenizer.batch_decode(labels, skip_special_tokens=True)
 
         score_dict = {
-            "accuracy": [],
             "rouge-1": [],
             "rouge-2": [],
             "rouge-l": [],
             "bleu-4": []
         }
         for pred, label in zip(decoded_preds, decoded_labels):
-            # Calculate accuracy: robust matching (case-insensitive contains)
-            p, l = pred.strip().upper(), label.strip().upper()
-            is_match = 1.0 if l in p or p in l else 0.0
-            score_dict["accuracy"].append(is_match)
-
             hypothesis = list(jieba.cut(pred))
             reference = list(jieba.cut(label))
-            
-            # Prevent ValueError: Hypothesis is empty in rouge_chinese
-            if len(hypothesis) == 0 or len(reference) == 0:
-                result = {
-                    "rouge-1": {"f": 0.0},
-                    "rouge-2": {"f": 0.0},
-                    "rouge-l": {"f": 0.0}
-                }
-            else:
-                rouge = Rouge()
-                scores = rouge.get_scores(' '.join(hypothesis) , ' '.join(reference))
-                result = scores[0]
+            rouge = Rouge()
+            scores = rouge.get_scores(' '.join(hypothesis) , ' '.join(reference))
+            result = scores[0]
             
             for k, v in result.items():
                 score_dict[k].append(round(v["f"] * 100, 4))
@@ -363,7 +326,7 @@ def main():
     training_args.generation_max_length = (
         training_args.generation_max_length
         if training_args.generation_max_length is not None
-        else data_args.max_source_length + data_args.val_max_target_length
+        else data_args.val_max_target_length
     )
     training_args.generation_num_beams = (
         data_args.num_beams if data_args.num_beams is not None else training_args.generation_num_beams
